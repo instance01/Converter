@@ -1,0 +1,11 @@
+name: Converter
+main: com.comze_instancelabs.convert.Main
+version: 1.0
+author: instancelabs
+commands:
+   conv:
+      description: Main command
+      usage: /conv [action]
+   converter:
+      description: Main command
+      usage: /converter [action]

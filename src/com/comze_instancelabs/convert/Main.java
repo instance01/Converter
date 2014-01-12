@@ -3,6 +3,7 @@ package com.comze_instancelabs.convert;
 import java.util.HashMap;
 
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -30,9 +31,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class Main extends JavaPlugin implements Listener{
 	
+	//TODO: saving credits into mysql
+	
 	// setup:
 	/*
+	 * once at beginning:
 	 * cm setmainlobby
+	 * 
+	 * for each arena:
 	 * cm createarena name
 	 * cm setlobby name
 	 * cm setspawn name 1
@@ -52,6 +58,7 @@ public class Main extends JavaPlugin implements Listener{
 	public static HashMap<String, String> arenap = new HashMap<String, String>(); // LOBBY player -> arena
 	public static HashMap<String, String> pteam = new HashMap<String, String>(); // player -> team
 	public static HashMap<String, String> lastteam = new HashMap<String, String>(); // INGAME player -> arena
+	public static HashMap<String, Boolean> canthrow = new HashMap<String, Boolean>();
 	
 	
 	@Override
@@ -87,6 +94,18 @@ public class Main extends JavaPlugin implements Listener{
 							getConfig().set("mainlobby.loc.y", l.getBlockY());
 							getConfig().set("mainlobby.loc.z", l.getBlockZ());
 							this.saveConfig();
+							sender.sendMessage(ChatColor.GREEN + "Successfully set component.");
+						}
+					}
+				}else if(action.equalsIgnoreCase("createarena")){
+					if(sender.hasPermission("converter.setup")){
+						if(args.length > 1){
+							String arena = args[1];
+							
+							getConfig().set(arena + ".name", arena);
+							sender.sendMessage(ChatColor.GREEN + "Successfully saved arena.");
+						}else{
+							sender.sendMessage("§cInvalid argument count! See /conv help for more info.");
 						}
 					}
 				}else if(action.equalsIgnoreCase("setlobby")){
@@ -96,11 +115,12 @@ public class Main extends JavaPlugin implements Listener{
 							
 							if(sender instanceof Player){
 								Location l = ((Player) sender).getLocation();
-								getConfig().set(arena + "spawn.world", l.getWorld().getName());
-								getConfig().set(arena + "spawn.loc.x", l.getBlockX());
-								getConfig().set(arena + "spawn.loc.y", l.getBlockY());
-								getConfig().set(arena + "spawn.loc.z", l.getBlockZ());
+								getConfig().set(arena + ".lobby.world", l.getWorld().getName());
+								getConfig().set(arena + ".lobby.loc.x", l.getBlockX());
+								getConfig().set(arena + ".lobby.loc.y", l.getBlockY());
+								getConfig().set(arena + ".lobby.loc.z", l.getBlockZ());
 								this.saveConfig();
+								sender.sendMessage(ChatColor.GREEN + "Successfully set component.");
 							}
 						}else{
 							sender.sendMessage("§cInvalid argument count! See /conv help for more info.");
@@ -116,12 +136,15 @@ public class Main extends JavaPlugin implements Listener{
 								if(count.equalsIgnoreCase("1") || count.equalsIgnoreCase("2")){
 									if(sender instanceof Player){
 										Location l = ((Player) sender).getLocation();
-										getConfig().set(arena + "spawn" + count + ".world", l.getWorld().getName());
-										getConfig().set(arena + "spawn" + count + ".loc.x", l.getBlockX());
-										getConfig().set(arena + "spawn" + count + ".loc.y", l.getBlockY());
-										getConfig().set(arena + "spawn" + count + ".loc.z", l.getBlockZ());
+										getConfig().set(arena + ".spawn" + count + ".world", l.getWorld().getName());
+										getConfig().set(arena + ".spawn" + count + ".loc.x", l.getBlockX());
+										getConfig().set(arena + ".spawn" + count + ".loc.y", l.getBlockY());
+										getConfig().set(arena + ".spawn" + count + ".loc.z", l.getBlockZ());
 										this.saveConfig();
+										sender.sendMessage(ChatColor.GREEN + "Successfully set component.");
 									}
+								}else{
+									sender.sendMessage("§cCount needs to be 1 or 2!");
 								}
 							}
 						}else{
@@ -135,8 +158,12 @@ public class Main extends JavaPlugin implements Listener{
 						if(sender instanceof Player){
 							if(isValidArena(arena)){
 								Player p = (Player)sender;
-								//TODO DETERMINE IF INGAME OR NOT!
-								joinLobby(p, arena);
+								Sign s = this.getSignFromArena(arena);
+								if(s != null){
+									if(s.getLine(1).equalsIgnoreCase("§2[join]")){
+										joinLobby(p, arena);
+									}
+								}
 							}
 						}
 					}else{
@@ -157,8 +184,33 @@ public class Main extends JavaPlugin implements Listener{
 				}else if(action.equalsIgnoreCase("start")){
 					if(sender.hasPermission("converter.setup")){
 						if(args.length > 1){
-							String arena = args[1];
-							
+							final String arena = args[1];
+							if(isValidArena(arena)){
+								for (final String p_ : arenap.keySet()) {
+									final Player p__ = Bukkit.getPlayerExact(p_);
+									if (arenap.get(p_).equalsIgnoreCase(arena)) {
+										Bukkit.getScheduler().runTaskLater(this, new Runnable() {
+											public void run() {
+												try{
+													p__.teleport(getSpawn(arena, pteam.get(p_)));
+													setTeam(p__, pteam.get(p_));
+												}catch(Exception e){
+													e.printStackTrace();
+												}
+											}
+										}, 5);
+									}
+								}
+								Bukkit.getScheduler().runTaskLater(this, new Runnable() {
+									public void run() {
+										try{
+											start(arena);
+										}catch(Exception e){
+											e.printStackTrace();
+										}
+									}
+								}, 10);
+							}
 						}else{
 							sender.sendMessage("§cInvalid argument count! See /conv help for more info.");
 						}
@@ -171,6 +223,7 @@ public class Main extends JavaPlugin implements Listener{
 				// show help
 				sender.sendMessage("TODO: help");
 			}
+			return true;
 		}
 		return false;
 	}
@@ -238,7 +291,7 @@ public class Main extends JavaPlugin implements Listener{
 	}
 
     public Sign getSignFromArena(String arena){
-		Location b_ = new Location(getServer().getWorld(getConfig().getString(arena + ".sign.world")), getConfig().getInt(arena + ".sign.loc.x"), getConfig().getInt(arena + ".sign.loc.y"), getConfig().getInt(arena + ".sign.loc.z"));
+		Location b_ = new Location(Bukkit.getWorld(getConfig().getString(arena + ".sign.world")), getConfig().getInt(arena + ".sign.loc.x"), getConfig().getInt(arena + ".sign.loc.y"), getConfig().getInt(arena + ".sign.loc.z"));
     	BlockState bs = b_.getBlock().getState();
     	Sign s_ = null;
     	if(bs instanceof Sign){
@@ -273,16 +326,16 @@ public class Main extends JavaPlugin implements Listener{
 		Location ret = null;
 		if (isValidArena(arena)) {
 			ret = new Location(Bukkit.getWorld(getConfig().getString(
-					arena + "spawn" + count + ".world")), getConfig().getInt(
-					arena + "spawn" + count + ".loc.x"),
-					getConfig().getInt(arena + "spawn" + count + ".loc.y"), getConfig().getInt(
-							arena + "spawn" + count + ".loc.z"));
+					arena + ".spawn" + count + ".world")), getConfig().getInt(
+					arena + ".spawn" + count + ".loc.x"),
+					getConfig().getInt(arena + ".spawn" + count + ".loc.y"), getConfig().getInt(
+							arena + ".spawn" + count + ".loc.z"));
 		}
 		return ret;
 	}
 	
 	public boolean isValidArena(String arena) {
-		if (getConfig().isSet(arena + ".spawn") && getConfig().isSet(arena + ".lobby")) {
+		if (getConfig().isSet(arena + ".spawn1") && getConfig().isSet(arena + ".spawn2") && getConfig().isSet("mainlobby") && getConfig().isSet(arena + ".lobby")) {
 			return true;
 		}
 		return false;
@@ -303,6 +356,8 @@ public class Main extends JavaPlugin implements Listener{
 	public void joinLobby(final Player p, final String arena) {
 		arenap.put(p.getName(), arena);
 
+		p.sendMessage(ChatColor.GREEN + "You joined arena " + ChatColor.GOLD + arena + ChatColor.GREEN + ".");
+		
 		String next = "1";
 		if(lastteam.containsKey(arena)){
 			String c = lastteam.get(arena);
@@ -312,6 +367,7 @@ public class Main extends JavaPlugin implements Listener{
 				next = "1";
 			}
 		}
+		lastteam.put(arena, next);
 		setTeam(p, next);
 		
 		p.setGameMode(GameMode.SURVIVAL);
@@ -329,13 +385,14 @@ public class Main extends JavaPlugin implements Listener{
 				count++;
 			}
 		}
-		if (count > 3) {
+		if (count > minplayers - 1) {
 			for (final String p_ : arenap.keySet()) {
 				final Player p__ = Bukkit.getPlayerExact(p_);
 				if (arenap.get(p_).equalsIgnoreCase(arena)) {
 					Bukkit.getScheduler().runTaskLater(this, new Runnable() {
 						public void run() {
 							p__.teleport(getSpawn(arena, pteam.get(p_)));
+							setTeam(p__, pteam.get(p_));
 						}
 					}, 5);
 				}
@@ -361,16 +418,23 @@ public class Main extends JavaPlugin implements Listener{
 	
 	
 	public void leave(final Player p){
+		p.getInventory().clear();
+		p.updateInventory();
+		p.getInventory().setBoots(null);
+		p.getInventory().setHelmet(null);
+		p.getInventory().setLeggings(null);
+		p.getInventory().setChestplate(null);
+		p.updateInventory();
 		Bukkit.getScheduler().runTaskLater(this, new Runnable() {
 			public void run() {
 				p.teleport(getMainLobby());
 			}
 		}, 5);
 
-		String arena = arenap.get(p);
+		String arena = arenap.get(p.getName());
 
-		if (arenap.containsKey(p)) {
-			arenap.remove(p);
+		if (arenap.containsKey(p.getName())) {
+			arenap.remove(p.getName());
 		}
 		if (arenap_.containsKey(p.getName())) {
 			arenap_.remove(p.getName());
@@ -398,7 +462,7 @@ public class Main extends JavaPlugin implements Listener{
 		
 		for (String p_ : arenap.keySet()) {
 			Player p = Bukkit.getPlayerExact(p_);
-			if (arenap.get(p).equalsIgnoreCase(arena)) {
+			if (arenap.get(p.getName()).equalsIgnoreCase(arena)) {
 				arenap_.put(p.getName(), arena);
 				// set inventory and exp bar
 				p.getInventory().clear();
@@ -411,8 +475,8 @@ public class Main extends JavaPlugin implements Listener{
 	
 	public void stop(String arena){
 		for(String p_ : arenap.keySet()){
-			Player p = Bukkit.getPlayerExact(p_);
-			if(arenap.get(p).equalsIgnoreCase(arena)){
+			if(arenap.get(p_).equalsIgnoreCase(arena)){ 
+				Player p = Bukkit.getPlayerExact(p_);
 				leave(p);
 			}
 		}
@@ -434,11 +498,35 @@ public class Main extends JavaPlugin implements Listener{
 	public void onProjectileThrownEvent(ProjectileLaunchEvent event) {
 		if (event.getEntity() instanceof Snowball) {
 			if(event.getEntity().getShooter() instanceof Player){
-				Player p = (Player)event.getEntity().getShooter();
+				final Player p = (Player)event.getEntity().getShooter();
 				if(p != null){
 					if(arenap_.containsKey(p.getName())){
-						p.getInventory().addItem(new ItemStack(Material.SNOW_BALL, 1));
-						p.updateInventory();
+						if(canthrow.containsKey(p.getName())){
+							if(canthrow.get(p.getName())){
+								// player can throw
+								canthrow.put(p.getName(), false);
+								p.getInventory().addItem(new ItemStack(Material.SNOW_BALL, 1));
+								p.updateInventory();
+								Bukkit.getScheduler().runTaskLater(this, new Runnable(){
+									public void run(){
+										canthrow.put(p.getName(), true);
+									}
+								}, 39); // 2 seconds
+							}else{
+								event.setCancelled(true);
+								p.getInventory().addItem(new ItemStack(Material.SNOW_BALL, 1));
+								p.updateInventory();
+							}
+						}else{
+							canthrow.put(p.getName(), false);
+							p.getInventory().addItem(new ItemStack(Material.SNOW_BALL, 1));
+							p.updateInventory();
+							Bukkit.getScheduler().runTaskLater(this, new Runnable(){
+								public void run(){
+									canthrow.put(p.getName(), true);
+								}
+							}, 39); // 2 seconds
+						}
 					}
 				}	
 			}
@@ -467,7 +555,6 @@ public class Main extends JavaPlugin implements Listener{
 	public void setTeam(Player p, String team){
 		pteam.put(p.getName(), team);
 		
-		//TODO: set the armor
 		ItemStack lhelmet = new ItemStack(Material.LEATHER_HELMET, 1);
 	    LeatherArmorMeta lam = (LeatherArmorMeta)lhelmet.getItemMeta();
 	    
