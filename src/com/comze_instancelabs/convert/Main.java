@@ -1,5 +1,6 @@
 package com.comze_instancelabs.convert;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 
 import org.bukkit.Bukkit;
@@ -60,6 +61,7 @@ public class Main extends JavaPlugin implements Listener{
 	public static HashMap<String, String> lastteam = new HashMap<String, String>(); // INGAME player -> arena
 	public static HashMap<String, Boolean> canthrow = new HashMap<String, Boolean>();
 	
+	public static ArrayList<String> lost = new ArrayList<String>();
 	
 	@Override
 	public void onEnable(){
@@ -173,7 +175,7 @@ public class Main extends JavaPlugin implements Listener{
 					if(sender instanceof Player){
 						Player p = (Player)sender;
 						if(arenap.containsKey(p.getName())){
-							leave(p);
+							leave(p, true);
 						}
 					}
 				}else if(action.equalsIgnoreCase("list")){
@@ -417,7 +419,7 @@ public class Main extends JavaPlugin implements Listener{
 	}
 	
 	
-	public void leave(final Player p){
+	public void leave(final Player p, boolean flag){
 		p.getInventory().clear();
 		p.updateInventory();
 		p.getInventory().setBoots(null);
@@ -448,8 +450,10 @@ public class Main extends JavaPlugin implements Listener{
 			}
 		}
 		
-		if(count < 1){
-			stop(arena);
+		if(flag){
+			if(count < 2){ // only one player left, stop it then
+				stop(arena);
+			}
 		}
 	}
 	
@@ -474,11 +478,16 @@ public class Main extends JavaPlugin implements Listener{
 	}
 	
 	public void stop(String arena){
+		ArrayList<Player> rem = new ArrayList<Player>();
 		for(String p_ : arenap.keySet()){
 			if(arenap.get(p_).equalsIgnoreCase(arena)){ 
 				Player p = Bukkit.getPlayerExact(p_);
-				leave(p);
+				rem.add(p);
 			}
+		}
+		
+		for(Player p : rem){
+			leave(p, false);
 		}
 
 		Sign s = this.getSignFromArena(arena);
@@ -535,17 +544,60 @@ public class Main extends JavaPlugin implements Listener{
 	
 	@EventHandler
 	public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-		if (event.getDamager() instanceof Snowball) {
-			Snowball snowball = (Snowball) event.getDamager();
-			Entity hitBySnowball = event.getEntity();
-			LivingEntity shooter = snowball.getShooter();
-			if (hitBySnowball instanceof Player && shooter instanceof Player) {
-				// set the new team
-				Player player = (Player) hitBySnowball;
-				Player o = (Player) shooter;
-				if(arenap_.containsKey(player.getName()) && arenap_.containsKey(o.getName())){
-					String team = pteam.get(o.getName());
-					setTeam(player, team);
+		try{
+			if (event.getDamager() instanceof Snowball) {
+				Snowball snowball = (Snowball) event.getDamager();
+				Entity hitBySnowball = event.getEntity();
+				LivingEntity shooter = snowball.getShooter();
+				if (hitBySnowball instanceof Player && shooter instanceof Player) {
+					// set the new team
+					Player player = (Player) hitBySnowball;
+					Player o = (Player) shooter;
+					if(arenap_.containsKey(player.getName()) && arenap_.containsKey(o.getName())){
+						String team = pteam.get(o.getName());
+						String otherteam = pteam.get(player.getName());
+						String arena = arenap_.get(player.getName());
+						setTeam(player, team);
+						lost.add(player.getName());
+						int count = 0;
+						for(String p : pteam.keySet()){
+							if(arenap_.get(p).equalsIgnoreCase(arena)){
+								if(pteam.get(p).equalsIgnoreCase(otherteam)){
+									count ++;
+								}
+							}
+						}
+						if(count < 1){
+							// noones in the other team anymore
+							teamwin(arena, team);
+							stop(arena);
+						}
+					}
+				}
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		
+	}
+	
+	public void teamwin(String arena, String team){
+		for(String p : pteam.keySet()){
+			if(arenap_.get(p).equalsIgnoreCase(arena)){
+				if(pteam.get(p).equalsIgnoreCase(team)){
+					Player p_ = Bukkit.getPlayerExact(p);
+					if(lost.contains(p)){
+						p_.sendMessage(ChatColor.RED + "Your team lost this game.");
+						//TODO save lost stats
+						lost.remove(p);
+					}else{
+						p_.sendMessage(ChatColor.GREEN + "Your team won this game!");
+						//TODO give credits via mysql and save won stats
+					}
+				}else{
+					Player p_ = Bukkit.getPlayerExact(p);
+					p_.sendMessage(ChatColor.RED + "Your team lost this game.");
+					//TODO save lost stats
 				}
 			}
 		}
