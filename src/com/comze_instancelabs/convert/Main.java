@@ -1,6 +1,5 @@
 package com.comze_instancelabs.convert;
 
-import java.io.IOException;
 import java.util.HashMap;
 
 import org.bukkit.Bukkit;
@@ -11,11 +10,16 @@ import org.bukkit.block.BlockState;
 import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Snowball;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
@@ -284,6 +288,9 @@ public class Main extends JavaPlugin implements Listener{
 	
 	public void joinLobby(final Player p, final String arena) {
 		arenap.put(p.getName(), arena);
+		//TODO PUT INTO A TEAM
+		
+		
 		p.setGameMode(GameMode.SURVIVAL);
 		Bukkit.getScheduler().runTaskLater(this, new Runnable() {
 			public void run() {
@@ -300,12 +307,12 @@ public class Main extends JavaPlugin implements Listener{
 			}
 		}
 		if (count > 3) {
-			for (String p_ : arenap.keySet()) {
+			for (final String p_ : arenap.keySet()) {
 				final Player p__ = Bukkit.getPlayerExact(p_);
 				if (arenap.get(p_).equalsIgnoreCase(arena)) {
 					Bukkit.getScheduler().runTaskLater(this, new Runnable() {
 						public void run() {
-							p__.teleport(getSpawn(arena));
+							p__.teleport(getSpawn(arena, pteam.get(p_)));
 						}
 					}, 5);
 				}
@@ -330,15 +337,113 @@ public class Main extends JavaPlugin implements Listener{
 	}
 	
 	
-	public void leave(){
+	public void leave(final Player p){
+		Bukkit.getScheduler().runTaskLater(this, new Runnable() {
+			public void run() {
+				p.teleport(getMainLobby());
+			}
+		}, 5);
+
+		String arena = arenap.get(p);
+
+		if (arenap.containsKey(p)) {
+			arenap.remove(p);
+		}
+		if (arenap_.containsKey(p.getName())) {
+			arenap_.remove(p.getName());
+		}
+
 		
+		int count = 0;
+		for (String p_ : arenap.keySet()) {
+			if (arenap.get(p_).equalsIgnoreCase(arena)) {
+				count++;
+			}
+		}
+		
+		if(count < 1){
+			stop(arena);
+		}
 	}
 	
-	public void start(){
+	public void start(String arena){
+		Sign s = this.getSignFromArena(arena);
+		if(s != null){
+			s.setLine(1, "§4[Ingame]");
+			s.update();
+		}
 		
+		for (String p_ : arenap.keySet()) {
+			Player p = Bukkit.getPlayerExact(p_);
+			if (arenap.get(p).equalsIgnoreCase(arena)) {
+				arenap_.put(p.getName(), arena);
+				// set inventory and exp bar
+				p.getInventory().clear();
+				p.updateInventory();
+				p.getInventory().addItem(new ItemStack(Material.SNOW_BALL, 1));
+				p.updateInventory();
+			}
+		}
 	}
 	
-	public void stop(){
+	public void stop(String arena){
+		for(String p_ : arenap.keySet()){
+			Player p = Bukkit.getPlayerExact(p_);
+			if(arenap.get(p).equalsIgnoreCase(arena)){
+				leave(p);
+			}
+		}
+
+		Sign s = this.getSignFromArena(arena);
+		if(s != null){
+			s.setLine(1, "§2[Join]");
+			s.setLine(3, "0/" + Integer.toString(minplayers));
+			s.update();
+		}
+
+	}
+	
+	
+	
+	
+	
+	@EventHandler
+	public void onProjectileThrownEvent(ProjectileLaunchEvent event) {
+		if (event.getEntity() instanceof Snowball) {
+			if(event.getEntity().getShooter() instanceof Player){
+				Player p = (Player)event.getEntity().getShooter();
+				if(p != null){
+					if(arenap_.containsKey(p.getName())){
+						p.getInventory().addItem(new ItemStack(Material.SNOW_BALL, 1));
+						p.updateInventory();
+					}
+				}	
+			}
+		}
+	}
+	
+	@EventHandler
+	public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+		if (event.getDamager() instanceof Snowball) {
+			Snowball snowball = (Snowball) event.getDamager();
+			Entity hitBySnowball = event.getEntity();
+			LivingEntity shooter = snowball.getShooter();
+			if (hitBySnowball instanceof Player && shooter instanceof Player) {
+				// set the new team
+				Player player = (Player) hitBySnowball;
+				Player o = (Player) shooter;
+				if(arenap_.containsKey(player.getName()) && arenap_.containsKey(o.getName())){
+					String team = pteam.get(o.getName());
+					setTeam(player, team);
+				}
+			}
+		}
+	}
+	
+	
+	public void setTeam(Player p, String team){
+		pteam.put(p.getName(), team);
 		
+		//TODO: set the armor
 	}
 }
