@@ -3,6 +3,7 @@ package com.comze_instancelabs.convert;
 import java.util.HashMap;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -23,6 +24,7 @@ import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 
@@ -49,6 +51,8 @@ public class Main extends JavaPlugin implements Listener{
 	public static HashMap<String, String> arenap_ = new HashMap<String, String>(); // INGAME player -> arena
 	public static HashMap<String, String> arenap = new HashMap<String, String>(); // LOBBY player -> arena
 	public static HashMap<String, String> pteam = new HashMap<String, String>(); // player -> team
+	public static HashMap<String, String> lastteam = new HashMap<String, String>(); // INGAME player -> arena
+	
 	
 	@Override
 	public void onEnable(){
@@ -125,16 +129,26 @@ public class Main extends JavaPlugin implements Listener{
 						}
 					}
 				}else if(action.equalsIgnoreCase("join")){
-					if(sender.hasPermission("converter.setup")){
-						if(args.length > 1){
-							String arena = args[1];
-							
-						}else{
-							sender.sendMessage("§cInvalid argument count! See /conv help for more info.");
+					if(args.length > 1){
+						String arena = args[1];
+						
+						if(sender instanceof Player){
+							if(isValidArena(arena)){
+								Player p = (Player)sender;
+								//TODO DETERMINE IF INGAME OR NOT!
+								joinLobby(p, arena);
+							}
 						}
+					}else{
+						sender.sendMessage("§cInvalid argument count! See /conv help for more info.");
 					}
 				}else if(action.equalsIgnoreCase("leave")){
-					
+					if(sender instanceof Player){
+						Player p = (Player)sender;
+						if(arenap.containsKey(p.getName())){
+							leave(p);
+						}
+					}
 				}else if(action.equalsIgnoreCase("list")){
 					if(sender.hasPermission("converter.list")){
 						sender.sendMessage("");
@@ -288,8 +302,17 @@ public class Main extends JavaPlugin implements Listener{
 	
 	public void joinLobby(final Player p, final String arena) {
 		arenap.put(p.getName(), arena);
-		//TODO PUT INTO A TEAM
-		
+
+		String next = "1";
+		if(lastteam.containsKey(arena)){
+			String c = lastteam.get(arena);
+			if(c.equalsIgnoreCase("1")){
+				next = "2";
+			}else{
+				next = "1";
+			}
+		}
+		setTeam(p, next);
 		
 		p.setGameMode(GameMode.SURVIVAL);
 		Bukkit.getScheduler().runTaskLater(this, new Runnable() {
@@ -445,5 +468,39 @@ public class Main extends JavaPlugin implements Listener{
 		pteam.put(p.getName(), team);
 		
 		//TODO: set the armor
+		ItemStack lhelmet = new ItemStack(Material.LEATHER_HELMET, 1);
+	    LeatherArmorMeta lam = (LeatherArmorMeta)lhelmet.getItemMeta();
+	    
+	    ItemStack lboots = new ItemStack(Material.LEATHER_BOOTS, 1);
+	    LeatherArmorMeta lam1 = (LeatherArmorMeta)lboots.getItemMeta();
+	    
+	    ItemStack lchestplate = new ItemStack(Material.LEATHER_CHESTPLATE, 1);
+	    LeatherArmorMeta lam2 = (LeatherArmorMeta)lchestplate.getItemMeta();
+	    
+	    ItemStack lleggings = new ItemStack(Material.LEATHER_LEGGINGS, 1);
+	    LeatherArmorMeta lam3 = (LeatherArmorMeta)lleggings.getItemMeta();
+
+	    Color c;
+	    if(team.equalsIgnoreCase("1")){
+	    	c = Color.RED;
+	    }else{
+	    	c = Color.BLUE;
+	    }
+	    lam3.setColor(c);
+	    lam2.setColor(c);
+	    lam1.setColor(c);
+	    lam.setColor(c);
+	   
+	    lhelmet.setItemMeta(lam);
+	    lboots.setItemMeta(lam1);
+	    lchestplate.setItemMeta(lam2);
+	    lleggings.setItemMeta(lam3);
+		
+	    p.getInventory().setBoots(lboots);
+	    p.getInventory().setHelmet(lhelmet);
+	    p.getInventory().setChestplate(lchestplate);
+	    p.getInventory().setLeggings(lleggings);
+	    
+		p.sendMessage("§aYou are in Team §6" + team + " §anow!");
 	}
 }
