@@ -218,19 +218,29 @@ public class Main extends JavaPlugin implements Listener{
 						}
 					}
 				}else if(action.equalsIgnoreCase("help")){
-					// show help
-					sender.sendMessage("TODO: help");
+					sendHelp(sender);
 				}
 			}else{
-				// show help
-				sender.sendMessage("TODO: help");
+				sendHelp(sender);
 			}
 			return true;
 		}
 		return false;
 	}
 	
-	
+	public void sendHelp(CommandSender sender){
+		sender.sendMessage("§6-= Converter §2help: §6=-");
+		sender.sendMessage("§2To §6setup the main lobby §2, type in §c/conv setmainlobby");
+		sender.sendMessage("§2To §6setup §2a new arena, type in the following commands:");
+		sender.sendMessage("§2/conv createarena [name]");
+		sender.sendMessage("§2/conv setspawn [name] 1");
+		sender.sendMessage("§2/conv setspawn [name] 2");
+		sender.sendMessage("§2/conv setlobby [name] §6- for the waiting lobby");
+		sender.sendMessage("");
+		sender.sendMessage("§2You can join with §c/conv join [name] §2and leave with §c/conv leave§2.");
+		sender.sendMessage("§2You can force an arena to start with §c/conv start [name]§2.");
+	}
+
 	
 	public void onPlayerDropItem(PlayerDropItemEvent event){
 		if(arenap_.containsKey(event.getPlayer().getName())){
